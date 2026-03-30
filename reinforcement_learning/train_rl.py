@@ -1,10 +1,24 @@
 import time
+import keyboard  # NEW: Added for the global kill switch
 from stable_baselines3 import PPO
-from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
 
 # THIS IS THE CRITICAL LINE THAT IS MISSING
 from trackmania_env import TrackmaniaEnv
 
+# --- NEW: Global Kill Switch Callback ---
+class GlobalKillSwitchCallback(BaseCallback):
+    def __init__(self, stop_key="q", verbose=0):
+        super().__init__(verbose)
+        self.stop_key = stop_key
+
+    def _on_step(self) -> bool:
+        # Check if the global hotkey is pressed
+        if keyboard.is_pressed(self.stop_key):
+            print(f"\n[!] Kill switch activated (pressed '{self.stop_key}'). Stopping training gracefully...")
+            return False  # Returning False tells SB3 to stop the learn() loop
+        return True
+# ----------------------------------------
 
 print("Starting RL Training...")
 print("Focus the Trackmania window in 5 seconds!")
@@ -62,19 +76,26 @@ checkpoint_callback = CheckpointCallback(
     name_prefix="tm_ppo_model"
 )
 
+# Initialize your new kill switch
+kill_switch_callback = GlobalKillSwitchCallback(stop_key="q")
+
 # 5. Train the agent
 try:
     print("=====================================================")
-    print("Training started! Press Ctrl+C in this terminal to stop and save early.")
+    print("Training started! Press 'q' ANYWHERE to stop and save early.")
     print("=====================================================")
 
-    # Start the learning process and pass the callback
-    model.learn(total_timesteps=100000, callback=checkpoint_callback)
+    # Start the learning process and pass BOTH callbacks as a list
+    model.learn(
+        total_timesteps=100000,
+        callback=[checkpoint_callback, kill_switch_callback]
+    )
 
 except KeyboardInterrupt:
-    print("\nTraining interrupted manually. Saving current progress...")
+    print("\nTraining interrupted via Terminal (Ctrl+C).")
 
 # 6. Save the final model and clean up
+print("\nSaving current progress...")
 model.save("ppo_trackmania_model_final")
 print("Final model saved as ppo_trackmania_model_final.zip!")
 
